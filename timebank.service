@@ -1,0 +1,16 @@
+[Unit]
+Description=Time Bank (DEV Weekend Challenge - Generosity Edition)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/var/www/timebank
+ExecStart=/usr/bin/python3 /var/www/timebank/server.py
+Environment=TIMEBANK_PORT=8791
+EnvironmentFile=-/var/www/timebank/keys.env
+Restart=always
+RestartSec=3
+User=root
+
+[Install]
+WantedBy=multi-user.target

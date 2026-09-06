@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Time Bank — give hours, not money</title>
+<meta name="description" content="A global community time bank: donate skill-hours instead of money. Charity for those who can't give cash. AI matching + voice access, in your language.">
+<style>
+:root{
+  --bg:#0f1412; --panel:#18201c; --panel2:#1f2a24; --line:#2c3a32;
+  --ink:#e8f0ea; --dim:#9db3a6; --acc:#4ade80; --acc2:#fbbf24; --bad:#f87171;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.55 "Segoe UI",system-ui,sans-serif;min-height:100vh}
+.wrap{max-width:960px;margin:0 auto;padding:20px 16px 80px}
+header{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+h1{font-size:1.7rem;letter-spacing:-.5px}
+h1 em{color:var(--acc);font-style:normal}
+.tag{color:var(--dim);font-size:.92rem}
+#langbar{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0 4px}
+#langbar button{background:var(--panel2);color:var(--dim);border:1px solid var(--line);
+  border-radius:999px;padding:4px 14px;font:inherit;font-size:.85rem;margin:0;cursor:pointer}
+#langbar button.on{color:#0c130f;background:var(--acc);border-color:var(--acc);font-weight:600}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px}
+@media(max-width:760px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+.panel h2{font-size:1.02rem;margin-bottom:12px;color:var(--acc)}
+.panel h2 small{color:var(--dim);font-weight:400}
+label{display:block;font-size:.82rem;color:var(--dim);margin:10px 0 4px}
+input,textarea{width:100%;background:var(--panel2);border:1px solid var(--line);color:var(--ink);
+  border-radius:9px;padding:9px 11px;font:inherit;font-size:.95rem}
+textarea{resize:vertical;min-height:64px}
+input:focus,textarea:focus{outline:none;border-color:var(--acc)}
+button{background:var(--acc);color:#0c130f;border:0;border-radius:9px;padding:10px 18px;
+  font:inherit;font-weight:600;cursor:pointer;margin-top:12px}
+button.ghost{background:transparent;color:var(--acc);border:1px solid var(--acc)}
+button:disabled{opacity:.5;cursor:wait}
+.need{border:1px solid var(--line);border-radius:10px;padding:11px 13px;margin-bottom:9px;background:var(--panel2)}
+.need .who{font-size:.8rem;color:var(--dim)}
+.need .what{margin:2px 0 4px}
+.need .hrs{color:var(--acc2);font-size:.85rem}
+.need button{padding:5px 12px;font-size:.82rem;margin-top:6px}
+.match{border-left:3px solid var(--acc);background:var(--panel2);border-radius:8px;padding:10px 12px;margin:8px 0;font-size:.93rem}
+.match b{color:var(--acc)}
+.ledger{font-size:.88rem}
+.ledger li{margin:7px 0 7px 16px;color:var(--dim)}
+.ledger b{color:var(--ink)}
+.stats{display:flex;gap:18px;flex-wrap:wrap;margin:14px 0 4px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 16px;text-align:center;flex:1;min-width:110px}
+.stat .n{font-size:1.5rem;font-weight:700;color:var(--acc)}
+.stat .l{font-size:.78rem;color:var(--dim)}
+audio{width:100%;margin-top:10px}
+.mode{font-size:.75rem;color:var(--dim);margin-top:6px}
+.mode b{color:var(--acc2)}
+.listen{margin-top:8px}
+footer{margin-top:36px;color:var(--dim);font-size:.85rem;text-align:center}
+.ok{color:var(--acc)} .warn{color:var(--acc2)}
+#toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--panel2);
+  border:1px solid var(--acc);border-radius:10px;padding:10px 20px;display:none;max-width:90vw}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Time <em>Bank</em></h1>
+    <span class="tag" data-i18n="tagline">give hours, not money — charity for those who can't give cash</span>
+  </header>
+
+  <div id="langbar"></div>
+
+  <div class="stats" id="stats"></div>
+
+  <div class="grid">
+    <div class="panel">
+      <h2><span data-i18n="give_title">I can give</span> <small data-i18n="give_sub">describe what you can do — AI finds who needs it</small></h2>
+      <label data-i18n="your_name">Your name</label>
+      <input id="g-name">
+      <label data-i18n="city">City</label>
+      <input id="g-city">
+      <label data-i18n="your_offer">Your offer</label>
+      <textarea id="g-offer"></textarea>
+      <button id="g-btn" onclick="doMatch()" data-i18n="find_matches">Find matches</button>
+      <div id="g-matches"></div>
+    </div>
+
+    <div class="panel">
+      <h2><span data-i18n="need_title">I need help</span> <small data-i18n="need_sub">ask the community for skill-hours</small></h2>
+      <label data-i18n="your_name">Your name</label>
+      <input id="n-name">
+      <label data-i18n="city">City</label>
+      <input id="n-city">
+      <label data-i18n="what_need">What do you need? Write in any language.</label>
+      <textarea id="n-need"></textarea>
+      <label data-i18n="hours_needed">Hours needed</label>
+      <input id="n-hours" type="number" min="0.5" max="40" step="0.5" value="2">
+      <button id="n-btn" onclick="postNeed()" data-i18n="post_request">Post request</button>
+      <div id="n-msg"></div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:16px">
+    <h2><span data-i18n="open_req">Open requests</span>
+      <button class="ghost listen" onclick="listenAll(this)">🔊 <span data-i18n="listen">Listen to all requests</span></button>
+    </h2>
+    <div id="needs-list"><span class="tag">…</span></div>
+    <div id="audio-box"></div>
+  </div>
+
+  <div class="panel" style="margin-top:16px">
+    <h2><span data-i18n="ledger_title">Hour ledger</span> <small data-i18n="ledger_sub">every hour given = one hour received, anytime</small></h2>
+    <ul class="ledger" id="ledger"></ul>
+  </div>
+
+  <footer>
+    Time Bank · DEV Weekend Challenge (Generosity Edition) ·
+    matching by Gemini · voice by ElevenLabs · <span data-i18n="demo_note">demo community data</span>
+  </footer>
+</div>
+<div id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ---------------- i18n ---------------- */
+const I18N = {
+  en: {
+    tagline:"give hours, not money — charity for those who can't give cash",
+    give_title:"I can give", give_sub:"describe what you can do — AI finds who needs it",
+    your_name:"Your name", city:"City", your_offer:"Your offer",
+    find_matches:"Find matches",
+    need_title:"I need help", need_sub:"ask the community for skill-hours",
+    what_need:"What do you need? Write in any language.", hours_needed:"Hours needed",
+    post_request:"Post request",
+    open_req:"Open requests", listen:"Listen to all requests",
+    ledger_title:"Hour ledger", ledger_sub:"every hour given = one hour received, anytime",
+    demo_note:"demo community data",
+    hours_exchanged:"hours exchanged", open_requests:"open requests",
+    members:"members", acts:"acts of generosity",
+    hours_requested:"hours requested", pledge:"Pledge",
+    gave:"gave", to:"to", no_open:"No open requests — post one!",
+    no_matches:"No close fits right now — post a request for what YOU need, or check back.",
+    engine_ai:"AI matched", engine_local:"keyword matched (demo mode)",
+    need_posted:"Posted! The community can see it now.",
+    toast_pledged:h=>`Hour pledged to ${h} — logged in the ledger`,
+    req_n:"Request", req_from:"from", req_in:"in", req_hours:"hours requested",
+    voice_intro:"Open requests on the community Time Bank.",
+    unknown_city:"unknown city",
+  },
+  es: {
+    tagline:"da horas, no dinero: solidaridad para quienes no pueden dar efectivo",
+    give_title:"Puedo dar", give_sub:"describe lo que sabes hacer — la IA encuentra quién lo necesita",
+    your_name:"Tu nombre", city:"Ciudad", your_offer:"Tu oferta",
+    find_matches:"Buscar coincidencias",
+    need_title:"Necesito ayuda", need_sub:"pide horas de habilidad a la comunidad",
+    what_need:"¿Qué necesitas? Escribe en cualquier idioma.", hours_needed:"Horas necesarias",
+    post_request:"Publicar solicitud",
+    open_req:"Solicitudes abiertas", listen:"Escuchar todas las solicitudes",
+    ledger_title:"Libro de horas", ledger_sub:"cada hora dada = una hora recibida, siempre",
+    demo_note:"datos de comunidad de demostración",
+    hours_exchanged:"horas intercambiadas", open_requests:"solicitudes abiertas",
+    members:"miembros", acts:"actos de generosidad",
+    hours_requested:"horas solicitadas", pledge:"Ofrecer",
+    gave:"dio", to:"a", no_open:"No hay solicitudes abiertas — ¡publica una!",
+    no_matches:"No hay coincidencias ahora — publica lo que tú necesitas, o vuelve luego.",
+    engine_ai:"coincidencia por IA", engine_local:"coincidencia por palabras (modo demo)",
+    need_posted:"¡Publicado! La comunidad ya lo puede ver.",
+    toast_pledged:h=>`Hora ofrecida a ${h} — registrada en el libro`,
+    req_n:"Solicitud", req_from:"de", req_in:"en", req_hours:"horas solicitadas",
+    voice_intro:"Solicitudes abiertas en el Time Bank de la comunidad.",
+    unknown_city:"ciudad desconocida",
+  },
+  fr: {
+    tagline:"donnez des heures, pas de l'argent : la générosité pour ceux qui n'ont pas d'argent",
+    give_title:"Je peux donner", give_sub:"décrivez ce que vous savez faire — l'IA trouve qui en a besoin",
+    your_name:"Votre nom", city:"Ville", your_offer:"Votre offre",
+    find_matches:"Trouver des correspondances",
+    need_title:"J'ai besoin d'aide", need_sub:"demandez des heures de compétences à la communauté",
+    what_need:"De quoi avez-vous besoin ? Écrivez dans n'importe quelle langue.", hours_needed:"Heures demandées",
+    post_request:"Publier la demande",
+    open_req:"Demandes ouvertes", listen:"Écouter toutes les demandes",
+    ledger_title:"Registre des heures", ledger_sub:"une heure donnée = une heure reçue, à tout moment",
+    demo_note:"données de communauté de démonstration",
+    hours_exchanged:"heures échangées", open_requests:"demandes ouvertes",
+    members:"membres", acts:"actes de générosité",
+    hours_requested:"heures demandées", pledge:"Promettre",
+    gave:"a donné", to:"à", no_open:"Aucune demande ouverte — publiez la vôtre !",
+    no_matches:"Aucune correspondance pour l'instant — publiez ce dont vous avez besoin, ou revenez plus tard.",
+    engine_ai:"correspondance par IA", engine_local:"correspondance par mots-clés (mode démo)",
+    need_posted:"Publié ! La communauté peut le voir maintenant.",
+    toast_pledged:h=>`Heure promise à ${h} — enregistrée au registre`,
+    req_n:"Demande", req_from:"de", req_in:"à", req_hours:"heures demandées",
+    voice_intro:"Demandes ouvertes sur le Time Bank communautaire.",
+    unknown_city:"ville inconnue",
+  },
+  bn: {
+    tagline:"টাকা নয়, সময় দিন — যাঁরা টাকা দিতে পারবেন না তাঁদের জন্য দান",
+    give_title:"আমি দিতে পারি", give_sub:"যা পারেন লিখুন — AI খুঁজে দেবে কার দরকার",
+    your_name:"আপনার নাম", city:"শহর", your_offer:"আপনার সামর্থ্য",
+    find_matches:"মিল খুঁজুন",
+    need_title:"আমার সাহায্য দরকার", need_sub:"কমিউনিটি থেকে দক্ষতার ঘণ্টা চাইতে পারেন",
+    what_need:"কী দরকার? যেকোনো ভাষায় লিখুন।", hours_needed:"কত ঘণ্টা",
+    post_request:"ছাড়ুন",
+    open_req:"খোলা অনুরোধ", listen:"সব অনুরোধ শুনুন",
+    ledger_title:"ঘণ্টার খাতা", ledger_sub:"এক ঘণ্টা দিলেন = এক ঘণ্টা পাবেন, যখন দরকার",
+    demo_note:"ডেমো কমিউনিটির ডেটা",
+    hours_exchanged:"ঘণ্টা বিনিময় হয়েছে", open_requests:"খোলা অনুরোধ",
+    members:"সদস্য", acts:"দানের ঘটনা",
+    hours_requested:"ঘণ্টা চাওয়া হয়েছে", pledge:"ইচ্ছা জানান",
+    gave:"দিয়েছেন", to:"কে", no_open:"কোনো খোলা অনুরোধ নেই — একটা ছাড়ুন!",
+    no_matches:"এখন মিল নেই — নিজের প্রয়োজন ছাড়ুন, বা পরে দেখুন।",
+    engine_ai:"AI মিল", engine_local:"কীওয়ার্ড মিল (ডেমো মোড)",
+    need_posted:"ছাড়া হয়েছে! কমিউনিটি এখন দেখতে পাবে।",
+    toast_pledged:h=>`${h}-কে ঘণ্টা দেওয়া হলো — খাতায় লেখা হলো`,
+    req_n:"অনুরোধ", req_from:"থেকে", req_in:"শহর", req_hours:"ঘণ্টা চাওয়া হয়েছে",
+    voice_intro:"কমিউনিটি টাইম ব্যাংকের খোলা অনুরোধগুলো।",
+    unknown_city:"অজানা শহর",
+  },
+};
+// voice tags for ElevenLabs multilingual + browser speechSynthesis
+const LANG_VOICE = {en:"en-US", es:"es-ES", fr:"fr-FR", bn:"bn-BD"};
+let LANG = localStorage.getItem('tb_lang') ||
+  (navigator.language||'en').slice(0,2);
+if(!I18N[LANG]) LANG = 'en';
+
+function t(key){ return I18N[LANG][key] ?? I18N.en[key]; }
+function tf(key, ...args){ const f = t(key); return typeof f==='function' ? f(...args) : f; }
+
+function renderLangbar(){
+  const names = {en:"English", es:"Español", fr:"Français", bn:"বাংলা"};
+  $('langbar').innerHTML = Object.keys(I18N).map(k =>
+    `<button class="${k===LANG?'on':''}" onclick="setLang('${k}')">${names[k]}</button>`).join('');
+}
+function setLang(k){ LANG = k; localStorage.setItem('tb_lang', k); renderLangbar(); applyI18n(); refresh(); }
+function applyI18n(){
+  document.documentElement.lang = LANG;
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const v = I18N[LANG][el.dataset.i18n];
+    if(typeof v === 'string') el.textContent = v;
+  });
+}
+
+/* ---------------- helpers ---------------- */
+function toast(msg, ok=true){
+  const t2 = $('toast');
+  t2.textContent = msg;
+  t2.style.borderColor = ok ? 'var(--acc)' : 'var(--bad)';
+  t2.style.display = 'block';
+  setTimeout(() => t2.style.display='none', 3200);
+}
+
+async function api(path, body){
+  const r = await fetch('/api/'+path, body ? {
+    method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
+  } : {});
+  if(!r.ok) throw new Error('API '+r.status);
+  return r.json();
+}
+
+function fmtAgo(ts){
+  const m = Math.max(1, Math.round((Date.now()/1000 - ts)/60));
+  if(m < 60) return m+'m';
+  const h = Math.round(m/60);
+  if(h < 24) return h+'h';
+  return Math.round(h/24)+'d';
+}
+
+/* ---------------- rendering ---------------- */
+async function refresh(){
+  const s = await api('state');
+  const open = s.needs.filter(n => !n.fulfilled);
+  const hours = s.ledger.reduce((a,l) => a + l.hours, 0);
+  $('stats').innerHTML = `
+    <div class="stat"><div class="n">${hours}</div><div class="l">${t('hours_exchanged')}</div></div>
+    <div class="stat"><div class="n">${open.length}</div><div class="l">${t('open_requests')}</div></div>
+    <div class="stat"><div class="n">${s.members.length}</div><div class="l">${t('members')}</div></div>
+    <div class="stat"><div class="n">${s.ledger.length}</div><div class="l">${t('acts')}</div></div>`;
+
+  $('needs-list').innerHTML = open.length ? open.map(n => `
+    <div class="need">
+      <div class="who">${esc(n.name)} · ${esc(n.city||t('unknown_city'))} · ${fmtAgo(n.created)}</div>
+      <div class="what">${esc(n.need)}</div>
+      <div class="hrs">${n.hours} ${t('hours_requested')}</div>
+      <button data-member="${esc(n.name)}" onclick="pledge('${n.id}', ${n.hours}, this)">${t('pledge')} ${n.hours}h</button>
+    </div>`).join('') : `<span class="tag">${t('no_open')}</span>`;
+
+  $('ledger').innerHTML = s.ledger.slice(0,12).map(l =>
+    `<li><b>${esc(l.from)}</b> ${t('gave')} ${l.hours}h ${t('to')} <b>${esc(l.to)}</b> — ${esc(l.what)} <span class="tag">(${fmtAgo(l.at)})</span></li>`
+  ).join('') || '<li>…</li>';
+}
+
+async function doMatch(){
+  const offer = $('g-offer').value.trim();
+  if(!offer){ toast(I18N[LANG].give_sub, false); return; }
+  const btn = $('g-btn'); btn.disabled = true;
+  try{
+    const r = await api('match', {offer});
+    const mode = r.mode === 'gemini' ? t('engine_ai') : t('engine_local');
+    $('g-matches').innerHTML = (r.matches.length ? r.matches.map(m => `
+      <div class="match">
+        <b>${esc(m.member)}</b> · ${esc(m.city)} · ${m.hours}h<br>
+        “${esc(m.need)}”<br>
+        <span class="ok">${esc(m.why)}</span><br>
+        <button data-member="${esc(m.member)}" onclick="pledge('${m.need_id}', ${m.hours_suggestion||m.hours}, this)">${t('pledge')} ${m.hours_suggestion||m.hours}h</button>
+      </div>`).join('')
+      : `<div class="match">${t('no_matches')}</div>`)
+      + `<div class="mode">${mode}</div>`;
+  }catch(e){ toast('Match failed: '+e.message, false); }
+  btn.disabled = false;
+}
+
+async function pledge(needId, hours, btn){
+  const toName = btn.dataset.member || '';
+  let name = $('g-name').value.trim() || prompt(I18N[LANG].your_name + ':');
+  if(!name) return;
+  btn.disabled = true;
+  try{
+    const r = await api('pledge', {member: name, need_id: needId, hours});
+    await api('fulfil', {pledge_id: r.pledge_id});
+    toast(tf('toast_pledged', toName));
+    await refresh();
+  }catch(e){ toast('Pledge failed: '+e.message, false); btn.disabled = false; }
+}
+
+async function postNeed(){
+  const need = $('n-need').value.trim();
+  if(!need){ toast(I18N[LANG].what_need, false); return; }
+  const btn = $('n-btn'); btn.disabled = true;
+  try{
+    await api('needs', {
+      name: $('n-name').value.trim() || 'Anonymous',
+      city: $('n-city').value.trim(),
+      need, hours: parseFloat($('n-hours').value) || 1
+    });
+    $('n-msg').innerHTML = `<span class="ok">${t('need_posted')}</span>`;
+    $('n-need').value = '';
+    await refresh();
+  }catch(e){ $('n-msg').innerHTML = '<span class="warn">Failed: '+esc(e.message)+'</span>'; }
+  btn.disabled = false;
+}
+
+async function listenAll(btn){
+  btn.disabled = true;
+  const label = t('listen');
+  btn.textContent = '…';
+  try{
+    const s = await api('state');
+    const open = s.needs.filter(n => !n.fulfilled);
+    if(!open.length){ toast(t('no_open')); return; }
+    const text = t('voice_intro') + ' ' +
+      open.map((n,i) => `${t('req_n')} ${i+1}, ${t('req_from')} ${n.name}, ${t('req_in')} ${n.city||t('unknown_city')}: ${n.need}. ${n.hours} ${t('req_hours')}.`).join(' ');
+    const r = await api('speak', {text});
+    if(r.audio){
+      $('audio-box').innerHTML = `<audio controls autoplay src="data:audio/mpeg;base64,${r.audio}"></audio>`;
+    }else{
+      toast('voice demo mode');
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = LANG_VOICE[LANG];
+      speechSynthesis.speak(u);
+    }
+  }catch(e){ toast('Voice failed: '+e.message, false); }
+  btn.disabled = false; btn.textContent = '🔊 ' + label;
+}
+
+renderLangbar();
+applyI18n();
+refresh().catch(e => document.body.insertAdjacentHTML('beforeend',
+  `<div style="color:var(--bad);padding:20px">Cannot reach server: ${esc(e.message)}</div>`));
+</script>
+</body>
+</html>
