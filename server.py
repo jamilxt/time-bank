@@ -34,6 +34,35 @@ GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
 
 LOCK = threading.Lock()
 
+# ---- simple per-IP rate limiting for the AI (quota-costing) endpoints ----
+# match: 8/hour, speak: 5/hour, per client IP. Everything else unlimited.
+RATE_LIMITS = {"/api/match": (8, 3600), "/api/speak": (5, 3600)}
+_hits = {}
+
+
+def rate_ok(ip, path):
+    rule = RATE_LIMITS.get(path)
+    if not rule:
+        return True
+    limit, window = rule
+    now = time.time()
+    with LOCK:
+        bucket = [t for t in _hits.get((ip, path), []) if now - t < window]
+        if len(bucket) >= limit:
+            _hits[(ip, path)] = bucket
+            return False
+        bucket.append(now)
+        _hits[(ip, path)] = bucket
+        # opportunistic cleanup so the dict can't grow forever
+        if len(_hits) > 5000:
+            for k in [k for k, v in _hits.items() if not v or now - v[-1] > window]:
+                del _hits[k]
+        return True
+
+
+def client_ip(handler):
+    return handler.headers.get("X-Forwarded-For", handler.client_address[0]).split(",")[0].strip()
+
 
 # ---------------------------------------------------------------- storage
 def load_state():
@@ -248,6 +277,9 @@ class Handler(BaseHTTPRequestHandler):
         fn = routes.get(self.path)
         if not fn:
             return self._send(404, {"error": "not found"})
+        # quota protection: AI endpoints are per-IP limited
+        if not rate_ok(client_ip(self), self.path):
+            return self._send(429, {"error": "rate limit exceeded, try again later"})
         return fn(data)
 
     # ---------- create need ----------
